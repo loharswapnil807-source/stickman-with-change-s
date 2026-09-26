@@ -1,5 +1,5 @@
 /* Offline cache for Stickman Typing Fighter (GitHub Pages / static hosts). */
-var CACHE = "typing-fighter-v1";
+var CACHE = "typing-fighter-v2";
 var ASSETS = ["./", "./index.html", "./style.css", "./game.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); }));
@@ -8,6 +8,9 @@ self.addEventListener("activate", function (e) {
   e.waitUntil(caches.keys().then(function (ks) {
     return Promise.all(ks.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
+});
+self.addEventListener("message", function (e) {
+  if (e.data && e.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 self.addEventListener("fetch", function (e) {
   if (e.request.method !== "GET") return;

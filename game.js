@@ -14,7 +14,7 @@ var el = {
   score: $("hud-score"), combo: $("hud-combo"), hp: $("hp-fill"), rival: $("hud-rival"), meta: $("hud-meta"),
   toast: $("toast"), overlay: $("overlay"), ovTitle: $("ov-title"), ovText: $("ov-text"),
   ovMain: $("ov-main"), ovQuit: $("ov-quit"), ovShare: $("ov-share"),
-  boardList: $("board-list"), preview: $("board-preview"), footHi: $("foot-hi"),
+  boardList: $("board-list"), preview: $("board-preview"), footHi: $("foot-hi"), appVer: $("app-ver"),
   mobile: $("mobile-keys"), muteBtn: $("btn-mute")
 };
 function show(name) {
@@ -970,9 +970,36 @@ try { var ln = localStorage.getItem("kw_last_name"); if (ln) { el.soloName.value
 renderBoard(); hud(); checkShared();
 
 /* offline + installable (GitHub Pages / https only; file:// keeps working without it) */
+var APP_VER = "v1.5";
+try { el.appVer.textContent = APP_VER; } catch (e) {}
 try {
   if (location.protocol.indexOf("http") === 0 && "serviceWorker" in navigator) {
-    window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").then(function (reg) {
+        function useWaiting() {
+          try { if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" }); } catch (e) {}
+        }
+        function poke() { try { reg.update(); } catch (e) {} }
+        poke();
+        setInterval(poke, 60000);
+        if (reg.waiting && navigator.serviceWorker.controller) useWaiting();
+        reg.addEventListener("updatefound", function () {
+          var sw = reg.installing;
+          if (!sw) return;
+          sw.addEventListener("statechange", function () {
+            if (sw.state === "installed" && navigator.serviceWorker.controller) useWaiting();
+          });
+        });
+      }).catch(function () {});
+    });
+    (function () {
+      var reloaded = false;
+      navigator.serviceWorker.addEventListener("controllerchange", function () {
+        if (reloaded) return; reloaded = true;
+        if (state.status === "playing") toast("Update ready — applies after this match");
+        else window.location.reload();
+      });
+    })();
   }
 } catch (e) {}
 requestAnimationFrame(frame);
