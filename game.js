@@ -11,7 +11,7 @@ var views = { setup: $("view-setup"), game: $("view-game"), board: $("view-board
 var el = {
   soloName: $("solo-name"), p1: $("p1-name"), p2: $("p2-name"), diff: $("difficulty"),
   hudName: $("hud-name"), hudMode: $("hud-mode"), timer: $("hud-timer"),
-  score: $("hud-score"), combo: $("hud-combo"), hp: $("hp-fill"),
+  score: $("hud-score"), combo: $("hud-combo"), hp: $("hp-fill"), rival: $("hud-rival"),
   toast: $("toast"), overlay: $("overlay"), ovTitle: $("ov-title"), ovText: $("ov-text"),
   ovMain: $("ov-main"), ovQuit: $("ov-quit"), ovShare: $("ov-share"),
   boardList: $("board-list"), preview: $("board-preview"), footHi: $("foot-hi"),
@@ -22,14 +22,14 @@ function show(name) {
   window.scrollTo(0, 0);
 }
 document.querySelectorAll("[data-nav]").forEach(function (b) {
-  b.addEventListener("click", function () { if (state.status !== "playing") { show(b.dataset.nav === "solo" ? "setup" : b.dataset.nav); if (b.dataset.nav === "board") renderBoard(); } });
+  b.addEventListener("click", function () { if (state.status !== "playing") { var v = b.dataset.nav === "contest" ? "setup" : b.dataset.nav; if (v !== "setup" && !views[v]) v = "setup"; show(v === "solo" ? "setup" : v); if (b.dataset.nav === "board") renderBoard(); } });
 });
 
 var state = fresh();
 function fresh() {
   return {
-    status: "setup", mode: "solo", playerName: "YOU", contest: null,
-    round: 1, dur: 60, left: 60, score: 0, health: 5, combo: 0, best: 0,
+    status: "setup", mode: "solo", playerName: "YOU", contest: null, seed: 0,
+    round: 1, dur: 45, left: 45, score: 0, health: 5, combo: 0, best: 0,
     total: 0, good: 0, miss: 0, letters: [], fall: 120, spawnDelay: 1600,
     spawnBase: 1600, spawnMult: 1,
     meA: "idle", meT: 0, opA: "idle", opT: 0,
@@ -78,6 +78,14 @@ el.ovShare.addEventListener("click", function () {
 });
 function checkShared() {
   try {
+    var j = location.search.match(/[?&]join=([A-Za-z0-9]{4})/);
+    if (j) {
+      show("setup");
+      var jc = $("join-code");
+      if (jc) jc.value = j[1].toUpperCase();
+      netStatus("Invite for room " + j[1].toUpperCase() + " — enter your name, press Join room.");
+      try { history.replaceState({}, "", location.pathname); } catch (e) {}
+    }
     var m = location.search.match(/[?&]r=([A-Za-z0-9\-_]+)/);
     if (!m) return;
     var s = m[1].replace(/-/g, "+").replace(/_/g, "/");
@@ -105,6 +113,16 @@ function loadB() { try { return JSON.parse(localStorage.getItem(BOARD_KEY) || "[
 function saveB(b) { try { localStorage.setItem(BOARD_KEY, JSON.stringify(b.slice(0, 40))); } catch (e) {} }
 function addEntry(e) { var b = loadB(); b.push(e); b.sort(function (a, c) { return c.score - a.score; }); saveB(b); renderBoard(); }
 function renderBoard() {
+  if (boardTab === "matches") {
+    var mm = loadM();
+    el.boardList.innerHTML = mm.length ? mm.map(function (m2) {
+      var d = new Date(m2.when || Date.now());
+      var t = d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      var res = m2.w ? ("🏆 <b>" + esc(m2.w) + "</b> won") : "🤝 Draw";
+      return "<li>" + res + " — <b>" + esc(m2.a.name) + "</b> " + fmt(m2.a.score) + " vs <b>" + esc(m2.b.name) + "</b> " + fmt(m2.b.score) + " <span class='muted'>" + t + "</span></li>";
+    }).join("") : "<li class='muted'>No matches yet — play online or contest!</li>";
+    return;
+  }
   var b = loadB().filter(function (e) { return (e.mode || "solo") === boardTab; }).slice(0, 10);
   var html = b.length ? b.map(function (e, i) {
     var m = ["🥇", "🥈", "🥉"][i] || ((i + 1) + ".");
@@ -121,14 +139,14 @@ function renderBoard() {
 var ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 function pick() {
   var c, g = 0;
-  do { c = ALPHA[(Math.random() * 26) | 0]; g++; } while (c === lastCh && run >= 2 && g < 20);
+  do { c = ALPHA[(R() * 26) | 0]; g++; } while (c === lastCh && run >= 2 && g < 20);
   if (c === lastCh) run++; else { lastCh = c; run = 1; }
   return c;
 }
 function spawn() {
-  var max = state.mode === "contest" ? 2 : state.round >= 4 ? 4 : state.round === 3 ? 3 : 2;
+  var max = (state.mode === "contest" || state.mode === "online") ? 2 : state.round >= 4 ? 4 : state.round === 3 ? 3 : 2;
   if (state.letters.length >= max) return;
-  state.letters.push({ id: "L" + (++seq), ch: pick(), x: 90 + Math.random() * (W - 180), y: SPAWN_Y, sp: state.fall * (0.92 + Math.random() * 0.16), wob: Math.random() * 6.28 });
+  state.letters.push({ id: "L" + (++seq), ch: pick(), x: 90 + R() * (W - 180), y: SPAWN_Y, sp: state.fall * (0.92 + R() * 0.16), wob: R() * 6.28 });
   state.total++;
 }
 function target() {
@@ -197,7 +215,12 @@ function resetFight() {
   state.letters = []; parts = []; dust = []; state.ghosts = [];
   state.opp = { ox: 0, oy: 0, vy: 0, air: false, rot: 0, vr: 0 };
   state.me = { dx: 0, dy: 0, air: false };
-  state.fx = null; spawnAcc = 0;
+  state.fx = null; spawnAcc = 0; lastCh = ""; run = 0; seq = 0;
+}
+/* Seeded rand: online races share a seed so both sides get identical letters */
+function R() {
+  if (state.seed) { state.seed = (state.seed * 1664525 + 1013904223) >>> 0; return state.seed / 4294967296; }
+  return Math.random();
 }
 function startSolo() {
   var d = diffV(), keep = state;
@@ -205,25 +228,26 @@ function startSolo() {
   state.mode = "solo"; state.playerName = clean(el.soloName.value, "YOU");
   try { localStorage.setItem("kw_last_name", state.playerName); } catch (e) {}
   state.status = "playing"; state.round = 1;
-  state.dur = 60; state.left = 60;
+  state.dur = 45; state.left = 45;
   state.fall = 120 * d.m; state.spawnDelay = Math.max(500, d.s);
   state.spawnBase = d.s; state.spawnMult = d.m;
-  resetFight(); show("game"); hideOverlay(); hud();
+  stopNet(); resetFight(); show("game"); hideOverlay(); setShare(null); hud();
   toast(state.playerName + " — FIGHT!", 1000);
 }
 function startContest() {
   var p1 = clean(el.p1.value, "PLAYER 1"), p2 = clean(el.p2.value, "PLAYER 2");
   if (p1 === p2) p2 += " 2";
   state = fresh(); state.mode = "contest"; state.contest = { p1: p1, p2: p2, turn: 1, a: null, b: null };
+  stopNet(); setShare(null);
   blitz(p1, 1);
 }
 function blitz(name, turn) {
   state.playerName = name; state.score = 0; state.health = 5;
   state.combo = 0; state.best = 0; state.total = 0; state.good = 0; state.miss = 0;
-  state.round = 1; state.dur = 60; state.left = 60; state.fall = 135; state.spawnDelay = 1400;
+  state.round = 1; state.dur = 45; state.left = 45; state.fall = 135; state.spawnDelay = 1400;
   state.status = "playing"; if (state.contest) state.contest.turn = turn;
-  resetFight(); show("game"); hideOverlay(); hud();
-  toast(name + " — 60s BLITZ!", 1200);
+  resetFight(); show("game"); hideOverlay(); setShare(null); hud();
+  toast(name + " — 45s BLITZ!", 1200);
 }
 function snap(name) {
   var acc = state.total ? Math.round(100 * state.good / state.total) : 100;
@@ -238,7 +262,8 @@ function timeUp() {
     } else {
       state.contest.b = s; finishContest();
     }
-  } else roundDone();
+  } else if (state.mode === "online") onlineDone(false);
+  else roundDone();
 }
 function roundDone() {
   if (state.status !== "playing") return;
@@ -246,12 +271,12 @@ function roundDone() {
   var acc = state.total ? Math.round(100 * state.good / state.total) : 100;
   var bonus = state.health * 500 + acc * 5;
   state.score += bonus;
-  overlay("Level complete", esc(state.playerName) + " · <b>" + fmt(state.score) + "</b> (+ " + fmt(bonus) + ")<br>" + acc + "% · best x" + state.best + "<br>Next: " + fmtT(60 + state.round * 45) + ", faster", "Next level →", nextRound);
+  overlay("Level complete", esc(state.playerName) + " · <b>" + fmt(state.score) + "</b> (+ " + fmt(bonus) + ")<br>" + acc + "% · best x" + state.best + "<br>Next: " + fmtT(45 + state.round * 30) + ", faster", "Next level →", nextRound);
   setShare({ n: state.playerName, s: state.score, a: acc, c: state.best, m: "solo" });
   hud();
 }
 function nextRound() {
-  state.round++; state.dur = 60 + (state.round - 1) * 45; state.left = state.dur;
+  state.round++; state.dur = 45 + (state.round - 1) * 30; state.left = state.dur;
   state.fall = (120 + (state.round - 1) * 25) * (state.spawnMult || 1);
   state.spawnDelay = Math.max(500, (state.spawnBase || 1600) - (state.round - 1) * 200);
   state.combo = 0; resetFight();
@@ -262,6 +287,7 @@ function nextRound() {
 function gameOver() {
   if (state.status === "gameOver") return;
   if (state.mode === "contest") { timeUp(); return; }
+  if (state.mode === "online") { onlineDone(false); return; }
   state.status = "gameOver"; state.letters = [];
   var acc = state.total ? Math.round(100 * state.good / state.total) : 0;
   addEntry({ name: state.playerName, score: state.score, acc: acc, combo: state.best, round: state.round, mode: "solo", date: Date.now() });
@@ -275,12 +301,143 @@ function finishContest() {
   addEntry({ name: b.name, score: b.score, acc: b.acc, combo: b.combo, round: 1, mode: "contest", date: Date.now() });
   var w = a.score === b.score ? null : (b.score > a.score ? b : a);
   state.status = "winner";
+  saveMatch({ a: { name: a.name, score: a.score }, b: { name: b.name, score: b.score }, w: w ? w.name : null, when: Date.now() });
   overlay(w ? "🏆 " + w.name + " wins!" : "🤝 Draw!",
     esc(a.name) + ": <b>" + fmt(a.score) + "</b> · " + a.acc + "%<br>" + esc(b.name) + ": <b>" + fmt(b.score) + "</b> · " + b.acc + "%",
     "⚔ Rematch", startContest);
   setShare(w ? { n: w.name, s: w.score, a: w.acc, c: w.combo, m: "contest", w: a.name + " " + fmt(a.score) + " vs " + b.name + " " + fmt(b.score) } : { n: a.name + " & " + b.name, s: Math.max(a.score, b.score), a: Math.max(a.acc, b.acc), c: Math.max(a.combo, b.combo), m: "contest" });
 }
-function quit() { state.status = "setup"; hideOverlay(); show("setup"); renderBoard(); }
+function quit() { stopNet(); state.status = "setup"; hideOverlay(); setShare(null); show("setup"); renderBoard(); }
+
+/* ---------- match records (saved every online/contest match) ---------- */
+var MATCH_KEY = "kw_matches_v1";
+function loadM() { try { return JSON.parse(localStorage.getItem(MATCH_KEY) || "[]"); } catch (e) { return []; } }
+function saveMatch(m) {
+  try { var a = loadM(); a.unshift(m); localStorage.setItem(MATCH_KEY, JSON.stringify(a.slice(0, 30))); } catch (e) {}
+  renderBoard();
+}
+
+/* ---------- online versus: free relay rooms, no account ---------- */
+var net = { peer: null, conn: null, role: null, code: null, myName: "YOU", rivalName: "RIVAL",
+  rival: { s: 0, c: 0, h: 5, g: 0, n: 0 }, rivalDone: null, mine: null, timer: null, waitT: null };
+var PEER_URL = "https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js";
+var PEER_PRE = "kw-tf-v1-";
+function netStatus(t) { var s = $("net-status"); if (s) s.textContent = t; }
+function needPeer(cb) {
+  if (window.Peer) return cb();
+  netStatus("Loading relay…");
+  var sc = document.createElement("script");
+  sc.src = PEER_URL; sc.async = true;
+  sc.onload = function () { cb(); };
+  sc.onerror = function () { netStatus("No connection to relay (offline?) — solo & same-device still work."); };
+  document.head.appendChild(sc);
+}
+function roomCode() { var A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789", s = ""; for (var i = 0; i < 4; i++) s += A[(Math.random() * A.length) | 0]; return s; }
+function inviteLink(code) { return location.href.split("?")[0].split("#")[0] + "?join=" + code; }
+function send(o) { try { if (net.conn && net.conn.open) net.conn.send(o); } catch (e) {} }
+function stopNet() {
+  if (!net) return;
+  if (net.timer) clearInterval(net.timer);
+  if (net.waitT) clearTimeout(net.waitT);
+  net.timer = net.waitT = null;
+  try { if (net.conn) net.conn.close(); } catch (e) {}
+  try { if (net.peer) net.peer.destroy(); } catch (e) {}
+  net.peer = net.conn = null; net.role = net.code = null; net.rivalDone = net.mine = null;
+}
+function wireConn(c) {
+  net.conn = c;
+  c.on("data", onNetData);
+  c.on("close", onNetDrop);
+  c.on("error", onNetDrop);
+}
+function onNetData(m) {
+  if (!m || !m.t) return;
+  if (m.t === "hello" && net.role === "host") {
+    net.rivalName = clean(m.name, "RIVAL");
+    var seed = (Math.random() * 2147483647) | 0;
+    send({ t: "welcome", name: net.myName, seed: seed });
+    startOnline(net.myName, net.rivalName, seed, "host");
+  } else if (m.t === "welcome" && net.role === "guest") {
+    net.rivalName = clean(m.name, "RIVAL");
+    startOnline(net.myName, net.rivalName, m.seed | 0, "guest");
+  } else if (m.t === "tick") {
+    net.rival = { s: m.s | 0, c: m.c | 0, h: m.h | 0, g: m.g | 0, n: m.n | 0 };
+    hud();
+  } else if (m.t === "done") {
+    net.rivalDone = m.snap;
+    if (state.status === "await") finishOnline(false);
+    else toast(net.rivalName + " finished!", 1200);
+  } else if (m.t === "go2" && net.role === "guest") {
+    startOnline(net.myName, net.rivalName, m.seed | 0, "guest");
+  } else if (m.t === "want-rematch" && net.role === "host" && state.status === "winner") {
+    toast(net.rivalName + " wants a rematch!", 1500);
+  }
+}
+function onNetDrop() {
+  if (state.mode === "online" && (state.status === "playing" || state.status === "await")) {
+    toast("Rival disconnected", 1500);
+    if (state.status === "playing") onlineDone(true);
+    else finishOnline(true);
+  }
+}
+function startOnline(name, rival, seed, role) {
+  state = fresh();
+  state.mode = "online"; state.playerName = name; state.seed = seed;
+  state.round = 1; state.dur = 45; state.left = 45; state.fall = 135; state.spawnDelay = 1400;
+  state.status = "playing";
+  net.role = role; net.rivalName = rival;
+  net.rival = { s: 0, c: 0, h: 5, g: 0, n: 0 }; net.rivalDone = net.mine = null;
+  if (net.timer) clearInterval(net.timer);
+  if (net.waitT) clearTimeout(net.waitT);
+  net.timer = setInterval(function () {
+    send({ t: "tick", s: state.score, c: state.combo, h: state.health, g: state.good, n: state.total });
+  }, 500);
+  resetFight(); show("game"); hideOverlay(); setShare(null); hud();
+  toast("FIGHT vs " + rival + "!", 1200);
+}
+function onlineDone(dropped) {
+  if (state.status !== "playing") return;
+  var s = snap(state.playerName);
+  net.mine = s;
+  send({ t: "done", snap: s });
+  state.status = "await"; state.letters = [];
+  if (net.rivalDone) { finishOnline(false); return; }
+  if (dropped) { finishOnline(true); return; }
+  overlay("Waiting for rival…", "You: <b>" + fmt(s.score) + "</b> · " + s.acc + "%<br>" + esc(net.rivalName) + " is finishing…", "Menu", quit);
+  setShare(null);
+  net.waitT = setTimeout(function () { finishOnline(true); }, 8000);
+  hud();
+}
+function finishOnline(timeout) {
+  if (net.waitT) clearTimeout(net.waitT);
+  if (net.timer) clearInterval(net.timer);
+  net.timer = net.waitT = null;
+  var a = net.mine || snap(state.playerName);
+  var b = net.rivalDone || { name: net.rivalName, score: net.rival.s,
+    acc: net.rival.n ? Math.round(100 * net.rival.g / net.rival.n) : 100, combo: net.rival.c, round: 1 };
+  var w = a.score === b.score ? null : (b.score > a.score ? b : a);
+  saveMatch({ a: { name: a.name, score: a.score }, b: { name: b.name, score: b.score }, w: w ? w.name : null, when: Date.now() });
+  addEntry({ name: a.name, score: a.score, acc: a.acc, combo: a.combo, round: 1, mode: "solo", date: Date.now() });
+  state.status = "winner";
+  overlay(w ? ("🏆 " + w.name + " wins!") : "🤝 Draw!",
+    esc(a.name) + ": <b>" + fmt(a.score) + "</b> · " + a.acc + "% · x" + a.combo + "<br>" +
+    esc(b.name) + ": <b>" + fmt(b.score) + "</b> · " + b.acc + "% · x" + b.combo +
+    (timeout && !net.rivalDone ? "<br><span class='muted'>Rival timed out.</span>" : ""),
+    "⚔ Rematch", onlineRematch);
+  setShare({ n: (w ? w.name : a.name + " & " + b.name), s: Math.max(a.score, b.score), a: Math.max(a.acc, b.acc),
+    c: Math.max(a.combo, b.combo), m: "online", w: a.name + " " + fmt(a.score) + " vs " + b.name + " " + fmt(b.score) });
+  hud();
+}
+function onlineRematch() {
+  if (net.role === "host") {
+    var seed = (Math.random() * 2147483647) | 0;
+    send({ t: "go2", seed: seed });
+    startOnline(net.myName, net.rivalName, seed, "host");
+  } else {
+    send({ t: "want-rematch" });
+    toast("Rematch requested — host starts it", 1500);
+  }
+}
 
 /* hud */
 function hud() {
@@ -292,6 +449,9 @@ function hud() {
   el.score.textContent = fmt(state.score);
   el.combo.textContent = "x" + state.combo;
   el.hp.style.width = (100 * state.health / 5) + "%";
+  if (state.mode === "online") {
+    el.rival.textContent = "⚔ " + net.rivalName + ": " + fmt(net.rival.s) + " · x" + net.rival.c + " · ♥" + net.rival.h + (net.rivalDone ? " · DONE" : "");
+  } else el.rival.textContent = "";
 }
 
 /* ---- canvas art (paper fighters + light stages) ---- */
@@ -527,7 +687,7 @@ document.addEventListener("keydown", function (e) {
   }
   if (k === "Enter") {
     if (state.status === "setup") startSolo();
-    else if (["roundComplete", "gameOver", "paused", "swap", "winner"].indexOf(state.status) >= 0) el.ovMain.click();
+    else if (["roundComplete", "gameOver", "paused", "swap", "winner", "await"].indexOf(state.status) >= 0) el.ovMain.click();
     return;
   }
   if ((k === "r" || k === "R") && ["gameOver", "winner"].indexOf(state.status) >= 0) { el.ovMain.click(); return; }
@@ -543,9 +703,70 @@ canvas.addEventListener("pointerdown", function () { try { el.mobile.focus({ pre
 $("btn-start").addEventListener("click", startSolo);
 $("btn-contest").addEventListener("click", startContest);
 $("btn-board").addEventListener("click", function () { show("board"); renderBoard(); });
-$("tab-solo").addEventListener("click", function () { boardTab = "solo"; $("tab-solo").classList.add("on"); $("tab-contest").classList.remove("on"); renderBoard(); });
-$("tab-contest").addEventListener("click", function () { boardTab = "contest"; $("tab-contest").classList.add("on"); $("tab-solo").classList.remove("on"); renderBoard(); });
-$("btn-clear").addEventListener("click", function () { saveB([]); renderBoard(); });
+function setTab(t) {
+  boardTab = t;
+  ["solo", "contest", "matches"].forEach(function (x) { $("tab-" + x).classList.toggle("on", x === t); });
+  renderBoard();
+}
+$("tab-solo").addEventListener("click", function () { setTab("solo"); });
+$("tab-contest").addEventListener("click", function () { setTab("contest"); });
+$("tab-matches").addEventListener("click", function () { setTab("matches"); });
+$("btn-clear").addEventListener("click", function () {
+  if (boardTab === "matches") { try { localStorage.setItem(MATCH_KEY, "[]"); } catch (e) {} }
+  else saveB(loadB().filter(function (e) { return (e.mode || "solo") !== boardTab; }));
+  renderBoard();
+});
+$("btn-create").addEventListener("click", function () {
+  net.myName = clean($("net-name").value || el.soloName.value, "YOU");
+  try { localStorage.setItem("kw_last_name", net.myName); } catch (e) {}
+  needPeer(function () {
+    stopNet();
+    var code = roomCode();
+    net.role = "host"; net.code = code; net.myName = clean($("net-name").value || el.soloName.value, "YOU");
+    netStatus("Creating room " + code + "…");
+    try { net.peer = new Peer(PEER_PRE + code); } catch (e) { netStatus("Relay error — try again."); return; }
+    net.peer.on("open", function () {
+      netStatus("Room " + code + " live — send the invite, then wait here.");
+      $("invite-row").classList.remove("hidden");
+      $("room-code").textContent = code;
+    });
+    net.peer.on("connection", function (c) { netStatus("Rival joined — FIGHT!"); wireConn(c); });
+    net.peer.on("error", function (e) {
+      if (e && e.type === "unavailable-id") { netStatus("Code clash — retrying…"); setTimeout(function () { $("btn-create").click(); }, 800); }
+      else netStatus("Relay hiccup — try again.");
+    });
+  });
+});
+$("btn-join").addEventListener("click", function () {
+  var code = clean($("join-code").value, "");
+  if (code.length !== 4) { netStatus("Enter the 4-letter room code."); return; }
+  net.myName = clean($("net-name").value || el.soloName.value, "YOU");
+  try { localStorage.setItem("kw_last_name", net.myName); } catch (e) {}
+  needPeer(function () {
+    stopNet();
+    net.role = "guest"; net.code = code; net.myName = clean($("net-name").value || el.soloName.value, "YOU");
+    netStatus("Joining " + code + "…");
+    var peer;
+    try { peer = new Peer(); net.peer = peer; } catch (e) { netStatus("Relay error — try again."); return; }
+    peer.on("open", function () {
+      var c = peer.connect(PEER_PRE + code, { reliable: true });
+      wireConn(c);
+      c.on("open", function () { c.send({ t: "hello", name: net.myName }); netStatus("Connected — waiting for host…"); });
+    });
+    peer.on("error", function (e) {
+      if (e && e.type === "peer-unavailable") netStatus("Room not found — check the code.");
+      else netStatus("Relay hiccup — try again.");
+    });
+  });
+});
+$("btn-invite").addEventListener("click", function () {
+  if (!net.code) return;
+  var url = inviteLink(net.code);
+  if (navigator.share) { navigator.share({ title: "Join my fight", text: "Race me in Stickman Typing Fighter!", url: url }).catch(function () {}); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(function () { netStatus("Invite copied — send it to your friend!"); }, function () { prompt("Copy invite:", url); });
+  } else prompt("Copy invite:", url);
+});
 $("btn-pause").addEventListener("click", function () {
   if (state.status === "playing") { state.status = "paused"; overlay("Paused", esc(state.playerName) + " · take a breath", "Resume", function () { state.status = "playing"; hideOverlay(); }); setShare(null); }
 });
@@ -569,7 +790,7 @@ el.muteBtn.addEventListener("click", function () { muted = !muted; el.muteBtn.te
   });
 })();
 
-try { var ln = localStorage.getItem("kw_last_name"); if (ln) el.soloName.value = ln; } catch (e) {}
+try { var ln = localStorage.getItem("kw_last_name"); if (ln) { el.soloName.value = ln; $("net-name").value = ln; } } catch (e) {}
 renderBoard(); hud(); checkShared();
 
 /* offline + installable (GitHub Pages / https only; file:// keeps working without it) */

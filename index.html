@@ -41,11 +41,27 @@
         <button id="btn-start" class="btn primary">▶ Play solo</button>
       </div>
       <div class="vs">
-        <b>Vs friends · same device · 60s each</b>
+        <b>Vs friends · same device · 45s each</b>
         <label>P1 <input id="p1-name" maxlength="12" placeholder="PLAYER 1" /></label>
         <label>P2 <input id="p2-name" maxlength="12" placeholder="PLAYER 2" /></label>
         <button id="btn-contest" class="btn">⚔ Start contest</button>
       </div>
+    </div>
+    <div class="vs online">
+      <b>🌐 Online versus · race a friend live (same letters, 45s)</b>
+      <div class="row">
+        <label>Your name <input id="net-name" maxlength="12" placeholder="YOU" /></label>
+        <label>Room code <input id="join-code" maxlength="4" placeholder="CODE" style="max-width:110px" /></label>
+      </div>
+      <div class="row">
+        <button id="btn-create" class="btn primary">Create room</button>
+        <button id="btn-join" class="btn">Join room</button>
+      </div>
+      <div id="invite-row" class="hidden row">
+        <b>Room <span id="room-code">—</span></b>
+        <button id="btn-invite" class="btn small">🔗 Copy invite</button>
+      </div>
+      <p id="net-status" class="muted">Needs internet once (free relay, no account). Record is saved after the match.</p>
     </div>
     <div class="board-mini">
       <div class="board-head"><b>🏆 Top scores</b><button id="btn-board" class="btn small">open board</button></div>
@@ -57,8 +73,9 @@
   <section id="view-game" class="hidden">
     <div class="hud">
       <div><span id="hud-name">YOU</span><span id="hud-mode" class="muted"></span></div>
-      <div class="hud-stats"><span id="hud-timer">1:00</span><span id="hud-score">0</span><span id="hud-combo">x0</span></div>
+      <div class="hud-stats"><span id="hud-timer">0:45</span><span id="hud-score">0</span><span id="hud-combo">x0</span></div>
     </div>
+    <div id="hud-rival" class="muted"></div>
     <div class="bar"><div id="hp-fill"></div></div>
     <div class="stage">
       <canvas id="game" width="960" height="540"></canvas>
@@ -84,6 +101,7 @@
     <div class="row">
       <button id="tab-solo" class="btn small on">Solo</button>
       <button id="tab-contest" class="btn small">Contest</button>
+      <button id="tab-matches" class="btn small">Matches</button>
       <button id="btn-clear" class="btn small">Clear</button>
     </div>
     <ol id="board-list"></ol>
@@ -97,8 +115,9 @@
       <li>Letters fall. Press the matching key <b>before</b> it crosses the red line.</li>
       <li>Hits build combo: <b>jab → cross → kick → launcher → air x2 → slam</b>.</li>
       <li>Miss = enemy hits you, −1 health. Wrong key = combo resets, no damage.</li>
-      <li>Solo: Round 1 = 1:00, then +0:45 each round, faster falls. 5 health.</li>
-      <li>Contest: two names, 60 seconds each on this device, higher score wins.</li>
+      <li>Solo: Round 1 = 0:45, then +0:30 each round, faster falls. 5 health.</li>
+      <li>Contest: two names, 45 seconds each on this device, higher score wins.</li>
+      <li>Online: create a room, share the invite, race live 45s with identical letters.</li>
       <li>Pause: <b>Esc</b> or <b>Shift+P</b> (plain P is a game letter).</li>
     </ol>
     <button class="btn primary" data-nav="solo">Got it</button>
