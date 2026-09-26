@@ -20,11 +20,12 @@ nav{display:flex;gap:4px;align-items:center}
 .vs{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px}
 label{display:block;font-size:13px;font-weight:600;margin:10px 0}
 input,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:15px;background:var(--card);color:var(--ink);text-transform:uppercase}
-.btn{border:1px solid var(--ink);background:var(--card);color:var(--ink);border-radius:999px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:15px}
-.btn.primary{background:var(--ink);color:#fff}
+.btn{border:1px solid var(--ink);background:var(--card);color:var(--ink);border-radius:999px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:15px;transition:transform .38s cubic-bezier(.34,1.8,.5,1),background-color .25s ease,color .25s ease,border-color .25s ease,box-shadow .38s cubic-bezier(.34,1.8,.5,1)}
+.btn:hover{background:#8f959e;border-color:#8f959e;color:#141412;transform:translateY(-2px) scale(1.05) rotate(-1deg);box-shadow:0 6px 0 rgba(0,0,0,.35)}
+.btn.primary{background:#16a34a;border-color:#16a34a;color:#fff}
 .btn.small{padding:7px 12px;font-size:13px}
-.btn.on{background:var(--ink);color:#fff}
-.btn:active{transform:translateY(1px)}
+.btn.on{background:#16a34a;border-color:#16a34a;color:#fff}
+.btn:active{transform:translateY(1px) scale(.97)}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;align-items:center}
 .board-mini{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
 .board-head{display:flex;justify-content:space-between;align-items:center}

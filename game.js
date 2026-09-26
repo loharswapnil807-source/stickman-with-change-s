@@ -389,7 +389,13 @@ function fighter(px, py, face, pose, t, isP, flash, rot) {
     ctx.moveTo(hx - 9, hy - 5); ctx.lineTo(hx - 1, hy + 3); ctx.moveTo(hx - 1, hy - 5); ctx.lineTo(hx - 9, hy + 3);
     ctx.moveTo(hx + 2, hy - 5); ctx.lineTo(hx + 10, hy + 3); ctx.moveTo(hx + 10, hy - 5); ctx.lineTo(hx + 2, hy + 3);
     ctx.stroke();
-  } else { ctx.beginPath(); ctx.moveTo(hx - 2, hy - 4); ctx.lineTo(hx - 2, hy + 4); ctx.stroke(); ctx.beginPath(); ctx.moveTo(hx - 2, hy); ctx.lineTo(hx + 10, hy); ctx.stroke(); }
+  } else {
+    // face elements: two eyes + smile (no more T mark)
+    ctx.fillStyle = flash ? "#e5484d" : "#111";
+    ctx.beginPath(); ctx.arc(hx - 6, hy - 4, 2.6, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(hx + 6, hy - 4, 2.6, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(hx, hy + 1, 8, 0.4, Math.PI - 0.4); ctx.stroke();
+  }
   if (isP) {
     ctx.fillStyle = "#fff"; ctx.strokeStyle = "#111"; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.ellipse(hx + 2, hy - 14, 20, 9, 0.1, Math.PI, 0); ctx.fill(); ctx.stroke();
