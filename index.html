@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Stickman Typing Fighter — typing beat 'em up</title>
+<meta name="description" content="A minimal typing beat 'em up. Type falling letters to punch, launch, juggle and slam the stickman. Solo + pass-and-play contest vs friends with leaderboard." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⌨️</text></svg>" />
+<meta name="theme-color" content="#141412" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="top">
+  <div class="brand">⌨️ Stickman Typing Fighter</div>
+  <nav>
+    <button class="link" data-nav="solo">Solo</button>
+    <button class="link" data-nav="contest">Contest</button>
+    <button class="link" data-nav="board">Board</button>
+    <button class="link" data-nav="how">How</button>
+    <button id="btn-theme" title="Toggle dark / light">🌙 Dark</button>
+  </nav>
+</header>
+
+<main class="wrap">
+  <!-- SETUP -->
+  <section id="view-setup" class="card">
+    <h1>Type to fight.</h1>
+    <p class="muted">Falling letters are punches. Every 4th hit <b>launches</b> — keep typing to juggle, then slam. Miss = you get hit.</p>
+    <div class="grid2">
+      <div>
+        <label>Name <input id="solo-name" maxlength="12" placeholder="YOU" autocomplete="nickname" /></label>
+        <label>Difficulty
+          <select id="difficulty">
+            <option value="easy">Easy</option>
+            <option value="normal" selected>Normal</option>
+            <option value="hard">Hard</option>
+          </select>
+        </label>
+        <button id="btn-start" class="btn primary">▶ Play solo</button>
+      </div>
+      <div class="vs">
+        <b>Vs friends · same device · 60s each</b>
+        <label>P1 <input id="p1-name" maxlength="12" placeholder="PLAYER 1" /></label>
+        <label>P2 <input id="p2-name" maxlength="12" placeholder="PLAYER 2" /></label>
+        <button id="btn-contest" class="btn">⚔ Start contest</button>
+      </div>
+    </div>
+    <div class="board-mini">
+      <div class="board-head"><b>🏆 Top scores</b><button id="btn-board" class="btn small">open board</button></div>
+      <ol id="board-preview"><li class="muted">No scores yet.</li></ol>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section id="view-game" class="hidden">
+    <div class="hud">
+      <div><span id="hud-name">YOU</span><span id="hud-mode" class="muted"></span></div>
+      <div class="hud-stats"><span id="hud-timer">1:00</span><span id="hud-score">0</span><span id="hud-combo">x0</span></div>
+    </div>
+    <div class="bar"><div id="hp-fill"></div></div>
+    <div class="stage">
+      <canvas id="game" width="960" height="540"></canvas>
+      <div id="toast"></div>
+      <div id="overlay" class="hidden"><div class="modal">
+        <h2 id="ov-title">Paused</h2>
+        <p id="ov-text" class="muted"></p>
+        <div class="row"><button id="ov-main" class="btn primary">Resume</button><button id="ov-share" class="btn small hidden">🔗 Share</button><button id="ov-quit" class="btn">Menu</button></div>
+      </div></div>
+    </div>
+    <div class="controls">
+      <button id="btn-pause" class="btn small">⏸ Pause</button>
+      <button id="btn-mute" class="btn small">🔊 Sound</button>
+      <button id="btn-quit" class="btn small">✕ Quit</button>
+      <span class="muted keys">A–Z · Esc / Shift+P pause · Enter start</span>
+    </div>
+    <input id="mobile-keys" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="tap here to type on mobile" />
+  </section>
+
+  <!-- BOARD -->
+  <section id="view-board" class="card hidden">
+    <h2>🏆 Leaderboard</h2>
+    <div class="row">
+      <button id="tab-solo" class="btn small on">Solo</button>
+      <button id="tab-contest" class="btn small">Contest</button>
+      <button id="btn-clear" class="btn small">Clear</button>
+    </div>
+    <ol id="board-list"></ol>
+    <button class="btn primary" data-nav="solo">← Back to play</button>
+  </section>
+
+  <!-- HOW -->
+  <section id="view-how" class="card hidden">
+    <h2>How to play</h2>
+    <ol class="how">
+      <li>Letters fall. Press the matching key <b>before</b> it crosses the red line.</li>
+      <li>Hits build combo: <b>jab → cross → kick → launcher → air x2 → slam</b>.</li>
+      <li>Miss = enemy hits you, −1 health. Wrong key = combo resets, no damage.</li>
+      <li>Solo: Round 1 = 1:00, then +0:45 each round, faster falls. 5 health.</li>
+      <li>Contest: two names, 60 seconds each on this device, higher score wins.</li>
+      <li>Pause: <b>Esc</b> or <b>Shift+P</b> (plain P is a game letter).</li>
+    </ol>
+    <button class="btn primary" data-nav="solo">Got it</button>
+  </section>
+
+  <footer class="muted">Static site · no account · scores stay on this device · <span id="foot-hi"></span></footer>
+</main>
+<script src="game.js"></script>
+</body>
+</html>
