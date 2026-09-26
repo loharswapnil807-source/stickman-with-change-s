@@ -11,7 +11,7 @@ var views = { setup: $("view-setup"), game: $("view-game"), board: $("view-board
 var el = {
   soloName: $("solo-name"), p1: $("p1-name"), p2: $("p2-name"), diff: $("difficulty"),
   hudName: $("hud-name"), hudMode: $("hud-mode"), timer: $("hud-timer"),
-  score: $("hud-score"), combo: $("hud-combo"), hp: $("hp-fill"), rival: $("hud-rival"),
+  score: $("hud-score"), combo: $("hud-combo"), hp: $("hp-fill"), rival: $("hud-rival"), meta: $("hud-meta"),
   toast: $("toast"), overlay: $("overlay"), ovTitle: $("ov-title"), ovText: $("ov-text"),
   ovMain: $("ov-main"), ovQuit: $("ov-quit"), ovShare: $("ov-share"),
   boardList: $("board-list"), preview: $("board-preview"), footHi: $("foot-hi"),
@@ -29,7 +29,8 @@ var state = fresh();
 function fresh() {
   return {
     status: "setup", mode: "solo", playerName: "YOU", contest: null, seed: 0,
-    round: 1, dur: 45, left: 45, score: 0, health: 5, combo: 0, best: 0,
+    round: 1, dur: 45, left: 45, endAt: 0, score: 0, health: 5, combo: 0, best: 0,
+    typed: 0, wrong: 0, t0: 0,
     total: 0, good: 0, miss: 0, letters: [], fall: 120, spawnDelay: 1600,
     spawnBase: 1600, spawnMult: 1,
     meA: "idle", meT: 0, opA: "idle", opT: 0,
@@ -102,6 +103,7 @@ function checkShared() {
   } catch (e) {}
 }
 function overlay(title, text, main, fn) {
+  try { if (document.activeElement === el.mobile) el.mobile.blur(); } catch (e) {}
   el.ovTitle.textContent = title; el.ovText.innerHTML = text || "";
   el.ovMain.textContent = main || "Resume"; el.overlay.classList.remove("hidden");
   el.ovMain.onclick = fn;
@@ -137,6 +139,7 @@ function renderBoard() {
 
 /* spawner */
 var ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+var WORDS = "CAT DOG RUN JUMP PLAY TYPE FAST GAME CODE KEY PUNCH KICK FIGHT WIN STAR MOON FIRE ROCK PAPER POWER SPEED LIGHT QUICK FOX LAZY HAPPY MUSIC DANCE SLAM COMBO RIVAL BLAZE STORM NINJA ROBOT PIXEL ARCADE LEVEL SCORE".split(" ");
 function pick() {
   var c, g = 0;
   do { c = ALPHA[(R() * 26) | 0]; g++; } while (c === lastCh && run >= 2 && g < 20);
@@ -146,6 +149,13 @@ function pick() {
 function spawn() {
   var max = (state.mode === "contest" || state.mode === "online") ? 2 : state.round >= 4 ? 4 : state.round === 3 ? 3 : 2;
   if (state.letters.length >= max) return;
+  if (state.mode === "solo" && state.round >= 2 && R() < (state.round >= 3 ? 0.4 : 0.25)) {
+    var pool = WORDS.filter(function (w) { return w.length <= (state.round >= 3 ? 5 : 4); });
+    var word = pool[(R() * pool.length) | 0];
+    state.letters.push({ id: "L" + (++seq), ch: word, word: word, prog: 0, x: 120 + R() * (W - 240), y: SPAWN_Y, sp: state.fall * 0.82 * (0.92 + R() * 0.16), wob: R() * 6.28 });
+    state.total++;
+    return;
+  }
   state.letters.push({ id: "L" + (++seq), ch: pick(), x: 90 + R() * (W - 180), y: SPAWN_Y, sp: state.fall * (0.92 + R() * 0.16), wob: R() * 6.28 });
   state.total++;
 }
@@ -216,6 +226,7 @@ function resetFight() {
   state.opp = { ox: 0, oy: 0, vy: 0, air: false, rot: 0, vr: 0 };
   state.me = { dx: 0, dy: 0, air: false };
   state.fx = null; spawnAcc = 0; lastCh = ""; run = 0; seq = 0;
+  state.typed = 0; state.t0 = performance.now();
 }
 /* Seeded rand: online races share a seed so both sides get identical letters */
 function R() {
@@ -232,6 +243,8 @@ function startSolo() {
   state.fall = 120 * d.m; state.spawnDelay = Math.max(500, d.s);
   state.spawnBase = d.s; state.spawnMult = d.m;
   stopNet(); resetFight(); show("game"); hideOverlay(); setShare(null); hud();
+  state.endAt = performance.now() + state.left * 1000;
+  tapType();
   toast(state.playerName + " — FIGHT!", 1000);
 }
 function startContest() {
@@ -247,6 +260,8 @@ function blitz(name, turn) {
   state.round = 1; state.dur = 45; state.left = 45; state.fall = 135; state.spawnDelay = 1400;
   state.status = "playing"; if (state.contest) state.contest.turn = turn;
   resetFight(); show("game"); hideOverlay(); setShare(null); hud();
+  state.endAt = performance.now() + state.left * 1000;
+  tapType();
   toast(name + " — 45s BLITZ!", 1200);
 }
 function snap(name) {
@@ -282,13 +297,15 @@ function nextRound() {
   state.combo = 0; resetFight();
   if (state.round % 3 === 1 && state.health < 5) state.health++;
   state.status = "playing"; hideOverlay(); hud();
+  state.endAt = performance.now() + state.left * 1000;
+  tapType();
   toast("ROUND " + state.round + " — FIGHT!", 1000);
 }
 function gameOver() {
   if (state.status === "gameOver") return;
   if (state.mode === "contest") { timeUp(); return; }
   if (state.mode === "online") { onlineDone(false); return; }
-  state.status = "gameOver"; state.letters = [];
+  state.status = "gameOver"; state.letters = []; state.left = 0;
   var acc = state.total ? Math.round(100 * state.good / state.total) : 0;
   addEntry({ name: state.playerName, score: state.score, acc: acc, combo: state.best, round: state.round, mode: "solo", date: Date.now() });
   overlay("Game over", esc(state.playerName) + " · <b>" + fmt(state.score) + "</b><br>Round " + state.round + " · " + acc + "% · best x" + state.best, "↻ Play again", startSolo);
@@ -317,9 +334,11 @@ function saveMatch(m) {
   renderBoard();
 }
 
+function tapType() { try { el.mobile.focus({ preventScroll: true }); } catch (e) {} }
 /* ---------- online versus: free relay rooms, no account ---------- */
 var net = { peer: null, conn: null, role: null, code: null, myName: "YOU", rivalName: "RIVAL",
-  rival: { s: 0, c: 0, h: 5, g: 0, n: 0 }, rivalDone: null, mine: null, timer: null, waitT: null };
+  rival: { s: 0, c: 0, h: 5, g: 0, n: 0 }, rivalDone: null, mine: null, timer: null, waitT: null,
+  matchSeed: 0, waitHello: null, helloTimer: null, helloN: 0 };
 var PEER_URL = "https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js";
 var PEER_PRE = "kw-tf-v1-";
 function netStatus(t) { var s = $("net-status"); if (s) s.textContent = t; }
@@ -339,10 +358,13 @@ function stopNet() {
   if (!net) return;
   if (net.timer) clearInterval(net.timer);
   if (net.waitT) clearTimeout(net.waitT);
-  net.timer = net.waitT = null;
+  if (net.waitHello) clearTimeout(net.waitHello);
+  if (net.helloTimer) clearInterval(net.helloTimer);
+  net.timer = net.waitT = net.waitHello = net.helloTimer = null;
   try { if (net.conn) net.conn.close(); } catch (e) {}
   try { if (net.peer) net.peer.destroy(); } catch (e) {}
   net.peer = net.conn = null; net.role = net.code = null; net.rivalDone = net.mine = null;
+  try { $("invite-row").classList.add("hidden"); } catch (e) {}
 }
 function wireConn(c) {
   net.conn = c;
@@ -353,13 +375,26 @@ function wireConn(c) {
 function onNetData(m) {
   if (!m || !m.t) return;
   if (m.t === "hello" && net.role === "host") {
+    if (state.mode === "online" && (state.status === "playing" || state.status === "await")) {
+      if (net.matchSeed) send({ t: "welcome", name: net.myName, seed: net.matchSeed, at: 0 });
+      return;
+    }
+    if (net.waitHello) { clearTimeout(net.waitHello); net.waitHello = null; }
     net.rivalName = clean(m.name, "RIVAL");
     var seed = (Math.random() * 2147483647) | 0;
-    send({ t: "welcome", name: net.myName, seed: seed });
-    startOnline(net.myName, net.rivalName, seed, "host");
+    net.matchSeed = seed;
+    var at = Date.now() + 2500;
+    send({ t: "welcome", name: net.myName, seed: seed, at: at });
+    netStatus("Rival found — starting…");
+    toast("Rival found — get ready!", 2000);
+    setTimeout(function () { startOnline(net.myName, net.rivalName, seed, "host"); }, Math.max(0, at - Date.now()));
   } else if (m.t === "welcome" && net.role === "guest") {
+    if (net.helloTimer) { clearInterval(net.helloTimer); net.helloTimer = null; }
     net.rivalName = clean(m.name, "RIVAL");
-    startOnline(net.myName, net.rivalName, m.seed | 0, "guest");
+    net.matchSeed = m.seed | 0;
+    netStatus("Connected — starting…");
+    var delay = m.at ? Math.max(0, m.at - Date.now()) : 500;
+    setTimeout(function () { startOnline(net.myName, net.rivalName, net.matchSeed, "guest"); }, delay);
   } else if (m.t === "tick") {
     net.rival = { s: m.s | 0, c: m.c | 0, h: m.h | 0, g: m.g | 0, n: m.n | 0 };
     hud();
@@ -393,6 +428,8 @@ function startOnline(name, rival, seed, role) {
     send({ t: "tick", s: state.score, c: state.combo, h: state.health, g: state.good, n: state.total });
   }, 500);
   resetFight(); show("game"); hideOverlay(); setShare(null); hud();
+  state.endAt = performance.now() + state.left * 1000;
+  tapType();
   toast("FIGHT vs " + rival + "!", 1200);
 }
 function onlineDone(dropped) {
@@ -400,7 +437,7 @@ function onlineDone(dropped) {
   var s = snap(state.playerName);
   net.mine = s;
   send({ t: "done", snap: s });
-  state.status = "await"; state.letters = [];
+  state.status = "await"; state.letters = []; state.left = 0;
   if (net.rivalDone) { finishOnline(false); return; }
   if (dropped) { finishOnline(true); return; }
   overlay("Waiting for rival…", "You: <b>" + fmt(s.score) + "</b> · " + s.acc + "%<br>" + esc(net.rivalName) + " is finishing…", "Menu", quit);
@@ -417,7 +454,7 @@ function finishOnline(timeout) {
     acc: net.rival.n ? Math.round(100 * net.rival.g / net.rival.n) : 100, combo: net.rival.c, round: 1 };
   var w = a.score === b.score ? null : (b.score > a.score ? b : a);
   saveMatch({ a: { name: a.name, score: a.score }, b: { name: b.name, score: b.score }, w: w ? w.name : null, when: Date.now() });
-  addEntry({ name: a.name, score: a.score, acc: a.acc, combo: a.combo, round: 1, mode: "solo", date: Date.now() });
+  addEntry({ name: a.name, score: a.score, acc: a.acc, combo: a.combo, round: 1, mode: "online", date: Date.now() });
   state.status = "winner";
   overlay(w ? ("🏆 " + w.name + " wins!") : "🤝 Draw!",
     esc(a.name) + ": <b>" + fmt(a.score) + "</b> · " + a.acc + "% · x" + a.combo + "<br>" +
@@ -450,8 +487,14 @@ function hud() {
   el.combo.textContent = "x" + state.combo;
   el.hp.style.width = (100 * state.health / 5) + "%";
   if (state.mode === "online") {
-    el.rival.textContent = "⚔ " + net.rivalName + ": " + fmt(net.rival.s) + " · x" + net.rival.c + " · ♥" + net.rival.h + (net.rivalDone ? " · DONE" : "");
+    var lead = state.score >= net.rival.s ? " · ▲ ahead" : " · ▼ behind";
+    el.rival.textContent = "⚔ " + net.rivalName + ": " + fmt(net.rival.s) + " · x" + net.rival.c + " · ♥" + net.rival.h + (net.rivalDone ? " · DONE" : "") + lead;
   } else el.rival.textContent = "";
+  var mins = (performance.now() - state.t0) / 60000;
+  var wpm = mins > 0.02 ? Math.round((state.typed / 5) / mins) : 0;
+  var att = state.good + state.miss + state.wrong;
+  var acc = att ? Math.round(100 * state.good / att) : 100;
+  el.meta.textContent = (state.status === "playing" || state.status === "paused") ? ("💨 " + wpm + " WPM · 🎯 " + acc + "%") : "";
 }
 
 /* ---- canvas art (paper fighters + light stages) ---- */
@@ -483,14 +526,66 @@ function paper(c, cx, cy, w, h, seed) {
 function stage() {
   var r = state.mode === "contest" ? state.contest.turn + 1 : state.round;
   if (r % 3 === 1) {
-    var sky = ctx.createLinearGradient(0, 0, 0, H * 0.55);
-    sky.addColorStop(0, "#d7e9dc"); sky.addColorStop(1, "#9db49d");
-    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H * 0.55);
+    var wall = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+    wall.addColorStop(0, "#f6e7cd"); wall.addColorStop(1, "#e2bf8f");
+    ctx.fillStyle = wall; ctx.fillRect(0, 0, W, H * 0.55);
+    ctx.fillStyle = "#8a5a33"; ctx.fillRect(56, 26, 224, 196);
+    var glass = ctx.createLinearGradient(0, 30, 0, 222);
+    glass.addColorStop(0, "#aed6ff"); glass.addColorStop(1, "#e9f7ff");
+    ctx.fillStyle = glass; ctx.fillRect(68, 38, 200, 172);
+    ctx.fillStyle = "rgba(255,242,190,.95)"; ctx.beginPath(); ctx.arc(222, 86, 26, 0, 7); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.92)";
+    ctx.beginPath(); ctx.ellipse(140, 92, 46, 14, 0, 0, 7); ctx.ellipse(182, 108, 34, 11, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#8a5a33"; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(168, 38); ctx.lineTo(168, 210); ctx.moveTo(68, 124); ctx.lineTo(268, 124); ctx.stroke();
+    ctx.fillStyle = "#33415c"; ctx.fillRect(700, 36, 184, 134);
+    ctx.fillStyle = "#f4f1e6"; ctx.fillRect(710, 46, 164, 114);
+    ctx.fillStyle = "#e5484d"; ctx.font = "900 46px system-ui, Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("A", 792, 102);
+    ctx.fillStyle = "#33415c"; ctx.font = "bold 15px Tahoma, Arial";
+    ctx.fillText("TYPE TO FIGHT", 792, 140);
     var wood = ctx.createLinearGradient(0, H * 0.5, 0, H);
-    wood.addColorStop(0, "#8a5a33"); wood.addColorStop(1, "#4a2c15");
+    wood.addColorStop(0, "#96683c"); wood.addColorStop(0.4, "#7a4f27"); wood.addColorStop(1, "#4a2c15");
     ctx.fillStyle = wood; ctx.fillRect(0, H * 0.5, W, H * 0.5);
-    ctx.fillStyle = "#1c1c1e"; ctx.fillRect(640, 40, 26, 220);
-    ctx.fillStyle = "#9fb6c4"; ctx.fillRect(790, 190, 130, 150);
+    ctx.strokeStyle = "rgba(0,0,0,.22)"; ctx.lineWidth = 2;
+    for (var pi = 0; pi < 5; pi++) { ctx.beginPath(); ctx.moveTo(0, H * 0.56 + pi * 34); ctx.lineTo(W, H * 0.53 + pi * 36); ctx.stroke(); }
+    ctx.fillStyle = "rgba(255,255,255,.28)"; ctx.fillRect(0, H * 0.5, W, 3);
+    ctx.save(); ctx.translate(430, 336); ctx.rotate(-0.06);
+    ctx.fillStyle = "rgba(0,0,0,.2)"; ctx.fillRect(-71, -34, 150, 86);
+    ctx.fillStyle = "#f7f4ec"; ctx.fillRect(-75, -40, 150, 86);
+    ctx.strokeStyle = "rgba(90,140,200,.5)"; ctx.lineWidth = 1;
+    for (var li = -26; li < 40; li += 11) { ctx.beginPath(); ctx.moveTo(-70, li); ctx.lineTo(70, li); ctx.stroke(); }
+    ctx.strokeStyle = "rgba(229,72,77,.6)";
+    ctx.beginPath(); ctx.moveTo(-52, -40); ctx.lineTo(-52, 46); ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.beginPath(); ctx.ellipse(110, 448, 52, 10, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#2e2e32"; ctx.fillRect(96, 400, 30, 14);
+    ctx.save(); ctx.translate(111, 400); ctx.rotate(0.18); ctx.fillStyle = "#3a3a40"; ctx.fillRect(-5, -190, 10, 190); ctx.restore();
+    ctx.save(); ctx.translate(143, 218); ctx.rotate(0.18);
+    ctx.fillStyle = "#1f5c46"; ctx.beginPath(); ctx.moveTo(-34, 0); ctx.lineTo(34, 0); ctx.lineTo(22, -64); ctx.lineTo(-22, -64); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#ffd98a"; ctx.beginPath(); ctx.ellipse(0, 4, 26, 8, 0, 0, 7); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = "rgba(255,214,130,.20)";
+    ctx.beginPath(); ctx.moveTo(120, 226); ctx.lineTo(166, 226); ctx.lineTo(230, 452); ctx.lineTo(40, 452); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.beginPath(); ctx.ellipse(846, 452, 56, 10, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#3f7d8c"; ctx.fillRect(806, 356, 82, 92);
+    ctx.fillStyle = "#356a77"; ctx.fillRect(806, 356, 82, 14);
+    ctx.strokeStyle = "#3f7d8c"; ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.arc(892, 402, 20, -1.2, 1.2); ctx.stroke();
+    var pens = [["#e5484d", 818], ["#f5b301", 836], ["#3f7d8c", 854]];
+    pens.forEach(function (pn, idx) {
+      var px = pn[1], lean2 = (idx - 1) * 5;
+      ctx.save(); ctx.translate(px, 330); ctx.rotate(lean2 * 0.02);
+      ctx.fillStyle = pn[0]; ctx.fillRect(-5, 0, 10, 62);
+      ctx.fillStyle = "#f2d8a7"; ctx.beginPath(); ctx.moveTo(-5, 0); ctx.lineTo(5, 0); ctx.lineTo(0, -12); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#222"; ctx.beginPath(); ctx.moveTo(-2, -7); ctx.lineTo(2, -7); ctx.lineTo(0, -12); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    });
+    ctx.save(); ctx.translate(620, 300); ctx.rotate(0.1);
+    ctx.fillStyle = "#ffe45e"; ctx.fillRect(-26, -26, 52, 52);
+    ctx.fillStyle = "#111"; ctx.font = "900 30px system-ui, Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("!", 0, 2);
+    ctx.restore();
   } else if (r % 3 === 2) {
     ctx.fillStyle = "#bcc7b8"; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = "#8f8a7c"; ctx.fillRect(120, 40, 420, 200); ctx.fillRect(90, 260, 560, 130);
@@ -575,16 +670,30 @@ function fighter(px, py, face, pose, t, isP, flash, rot) {
 function tile(l, isT, t) {
   ctx.save();
   ctx.translate(l.x + Math.sin(t * 3 + l.wob) * 4, l.y);
-  var w = 58, h = 66;
+  var w = l.word ? (30 + l.word.length * 24) : 58, h = 66;
   ctx.shadowColor = "rgba(0,0,0,.6)"; ctx.shadowOffsetX = 4; ctx.shadowOffsetY = 5;
   ctx.fillStyle = isT ? "#141412" : "#f4f1e6";
   ctx.strokeStyle = "#000"; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.rect(-w / 2, -h / 2, w, h); ctx.fill(); ctx.stroke();
   ctx.shadowColor = "transparent";
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = "900 36px system-ui, Arial";
-  ctx.fillStyle = isT ? "#fff" : "#141412";
-  ctx.fillText(l.ch, 0, -2);
+  if (l.word) {
+    ctx.font = "900 26px system-ui, Arial";
+    ctx.fillStyle = isT ? "#fff" : "#141412";
+    ctx.fillText(l.word, 0, -2);
+    if (l.prog > 0) {
+      var tw = ctx.measureText(l.word).width;
+      var done = l.word.slice(0, l.prog);
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#4ade80";
+      ctx.fillText(done, -tw / 2, -2);
+      ctx.textAlign = "center";
+    }
+  } else {
+    ctx.font = "900 36px system-ui, Arial";
+    ctx.fillStyle = isT ? "#fff" : "#141412";
+    ctx.fillText(l.ch, 0, -2);
+  }
   if (isT) { ctx.fillStyle = "#e5484d"; ctx.fillRect(-w / 2 + 4, h / 2 - 10, w - 8, 6); }
   ctx.restore();
 }
@@ -608,8 +717,8 @@ function frame(now) {
   var t = now / 1000;
   if (state.hitstop > 0) { state.hitstop -= dt; dt *= 0.05; }
   if (state.status === "playing") {
-    state.left -= dt;
-    if (state.left <= 0) { state.left = 0; hud(); timeUp(); }
+    state.left = Math.max(0, (state.endAt - performance.now()) / 1000);
+    if (state.left <= 0) { hud(); timeUp(); }
     else {
       spawnAcc += dt * 1000;
       if (spawnAcc >= state.spawnDelay) { spawnAcc = 0; spawn(); }
@@ -671,17 +780,40 @@ function frame(now) {
 /* input */
 function press(ch) {
   if (state.status !== "playing") return;
-  var c = state.letters.filter(function (l) { return l.ch === ch; });
-  if (c.length) { c.sort(function (a, b) { return b.y - a.y; }); hit(c[0]); }
-  else { state.combo = 0; sfx(180, 0.07, "square", 0.04); hud(); }
+  var tg = target();
+  if (!tg) return;
+  if (tg.word) {
+    if (ch === tg.word[tg.prog]) {
+      tg.prog++; state.typed++;
+      sfx(600 + tg.prog * 40, 0.05, "square", 0.04);
+      if (tg.prog >= tg.word.length) hit(tg); else hud();
+    } else { state.wrong++; state.combo = 0; sfx(180, 0.07, "square", 0.04); hud(); }
+    return;
+  }
+  var c = state.letters.filter(function (l) { return !l.word && l.ch === ch; });
+  if (c.length) { c.sort(function (a, b) { return b.y - a.y; }); state.typed++; hit(c[0]); }
+  else { state.wrong++; state.combo = 0; sfx(180, 0.07, "square", 0.04); hud(); }
+}
+function pauseGame() {
+  if (state.mode === "online") { toast("No pausing a live race!"); return; }
+  if (state.status !== "playing") return;
+  state.status = "paused";
+  overlay("Paused", esc(state.playerName) + " · take a breath", "Resume", resumeGame);
+  setShare(null);
+}
+function resumeGame() {
+  if (state.status !== "paused") return;
+  state.status = "playing";
+  state.endAt = performance.now() + state.left * 1000;
+  hideOverlay();
 }
 document.addEventListener("keydown", function (e) {
   if (e.key === " " || e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
   if (document.activeElement === el.mobile) return; // mobile input handles itself
   var k = e.key;
   if (k === "Escape" || (e.shiftKey && (k === "P" || k === "p"))) {
-    if (state.status === "playing") { state.status = "paused"; overlay("Paused", esc(state.playerName) + " · take a breath", "Resume", function () { state.status = "playing"; hideOverlay(); }); setShare(null); }
-    else if (state.status === "paused") { state.status = "playing"; hideOverlay(); }
+    if (state.status === "playing") pauseGame();
+    else if (state.status === "paused") resumeGame();
     e.preventDefault();
     return;
   }
@@ -705,12 +837,13 @@ $("btn-contest").addEventListener("click", startContest);
 $("btn-board").addEventListener("click", function () { show("board"); renderBoard(); });
 function setTab(t) {
   boardTab = t;
-  ["solo", "contest", "matches"].forEach(function (x) { $("tab-" + x).classList.toggle("on", x === t); });
+  ["solo", "contest", "online", "matches"].forEach(function (x) { $("tab-" + x).classList.toggle("on", x === t); });
   renderBoard();
 }
 $("tab-solo").addEventListener("click", function () { setTab("solo"); });
 $("tab-contest").addEventListener("click", function () { setTab("contest"); });
 $("tab-matches").addEventListener("click", function () { setTab("matches"); });
+$("tab-online").addEventListener("click", function () { setTab("online"); });
 $("btn-clear").addEventListener("click", function () {
   if (boardTab === "matches") { try { localStorage.setItem(MATCH_KEY, "[]"); } catch (e) {} }
   else saveB(loadB().filter(function (e) { return (e.mode || "solo") !== boardTab; }));
@@ -730,7 +863,20 @@ $("btn-create").addEventListener("click", function () {
       $("invite-row").classList.remove("hidden");
       $("room-code").textContent = code;
     });
-    net.peer.on("connection", function (c) { netStatus("Rival joined — FIGHT!"); wireConn(c); });
+    net.peer.on("connection", function (c) {
+      netStatus("Rival knocking — shaking hands…");
+      wireConn(c);
+      if (net.waitHello) clearTimeout(net.waitHello);
+      net.waitHello = setTimeout(function () {
+        net.waitHello = null;
+        try { c.close(); } catch (e) {}
+        netStatus("Knocked but no handshake — ask your rival to rejoin.");
+      }, 12000);
+    });
+    net.peer.on("disconnected", function () {
+      netStatus("Lost relay — reconnecting…");
+      try { net.peer.reconnect(); } catch (e) {}
+    });
     net.peer.on("error", function (e) {
       if (e && e.type === "unavailable-id") { netStatus("Code clash — retrying…"); setTimeout(function () { $("btn-create").click(); }, 800); }
       else netStatus("Relay hiccup — try again.");
@@ -751,7 +897,27 @@ $("btn-join").addEventListener("click", function () {
     peer.on("open", function () {
       var c = peer.connect(PEER_PRE + code, { reliable: true });
       wireConn(c);
-      c.on("open", function () { c.send({ t: "hello", name: net.myName }); netStatus("Connected — waiting for host…"); });
+      net.helloN = 0;
+      c.on("open", function () {
+        netStatus("Connected — shaking hands…");
+        send({ t: "hello", name: net.myName });
+        if (net.helloTimer) clearInterval(net.helloTimer);
+        net.helloTimer = setInterval(function () {
+          if (state.mode === "online") { clearInterval(net.helloTimer); net.helloTimer = null; return; }
+          net.helloN++;
+          if (net.helloN > 8) {
+            clearInterval(net.helloTimer); net.helloTimer = null;
+            netStatus("Couldn't connect — is the host still on this page? Check the code.");
+            stopNet();
+            return;
+          }
+          send({ t: "hello", name: net.myName });
+        }, 1500);
+      });
+    });
+    peer.on("disconnected", function () {
+      netStatus("Lost relay — reconnecting…");
+      try { peer.reconnect(); } catch (e) {}
     });
     peer.on("error", function (e) {
       if (e && e.type === "peer-unavailable") netStatus("Room not found — check the code.");
@@ -767,11 +933,21 @@ $("btn-invite").addEventListener("click", function () {
     navigator.clipboard.writeText(url).then(function () { netStatus("Invite copied — send it to your friend!"); }, function () { prompt("Copy invite:", url); });
   } else prompt("Copy invite:", url);
 });
-$("btn-pause").addEventListener("click", function () {
-  if (state.status === "playing") { state.status = "paused"; overlay("Paused", esc(state.playerName) + " · take a breath", "Resume", function () { state.status = "playing"; hideOverlay(); }); setShare(null); }
+$("btn-leave").addEventListener("click", function () {
+  stopNet();
+  netStatus("Room closed.");
 });
+$("btn-pause").addEventListener("click", function () {
+  pauseGame();
+});
+var quitArm = null;
 el.ovQuit.addEventListener("click", quit);
-$("btn-quit").addEventListener("click", quit);
+$("btn-quit").addEventListener("click", function () {
+  if (state.status !== "playing") { quit(); return; }
+  if (quitArm) { clearTimeout(quitArm); quitArm = null; $("btn-quit").textContent = "✕ Quit"; quit(); return; }
+  $("btn-quit").textContent = "Sure?";
+  quitArm = setTimeout(function () { quitArm = null; $("btn-quit").textContent = "✕ Quit"; }, 3000);
+});
 el.muteBtn.addEventListener("click", function () { muted = !muted; el.muteBtn.textContent = muted ? "🔇 Muted" : "🔊 Sound"; });
 
 /* theme: dark / light, remembered */
