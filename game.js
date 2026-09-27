@@ -11,7 +11,7 @@ var views = { setup: $("view-setup"), game: $("view-game"), board: $("view-board
 var el = {
   soloName: $("solo-name"), p1: $("p1-name"), p2: $("p2-name"), diff: $("difficulty"),
   hudName: $("hud-name"), hudMode: $("hud-mode"), timer: $("hud-timer"),
-  score: $("hud-score"), combo: $("hud-combo"), hp: $("hp-fill"), rival: $("hud-rival"), meta: $("hud-meta"),
+  score: $("hud-score"), combo: $("hud-combo"), hpbar: document.querySelector(".bar"), rival: $("hud-rival"), meta: $("hud-meta"),
   toast: $("toast"), overlay: $("overlay"), ovTitle: $("ov-title"), ovText: $("ov-text"),
   ovMain: $("ov-main"), ovQuit: $("ov-quit"), ovShare: $("ov-share"),
   boardList: $("board-list"), preview: $("board-preview"), footHi: $("foot-hi"), appVer: $("app-ver"),
@@ -29,7 +29,8 @@ var state = fresh();
 function fresh() {
   return {
     status: "setup", mode: "solo", playerName: "YOU", contest: null, seed: 0,
-    round: 1, dur: 45, left: 45, endAt: 0, score: 0, health: 5, combo: 0, best: 0,
+    round: 1, dur: 45, left: 45, endAt: 0, score: 0, health: 12, combo: 0, best: 0,
+    _lastHp: 12,
     typed: 0, wrong: 0, t0: 0,
     total: 0, good: 0, miss: 0, letters: [], fall: 120, spawnDelay: 1600,
     spawnBase: 1600, spawnMult: 1,
@@ -258,7 +259,7 @@ function startContest() {
   blitz(p1, 1);
 }
 function blitz(name, turn) {
-  state.playerName = name; state.score = 0; state.health = 5;
+  state.playerName = name; state.score = 0; state.health = 12;
   state.combo = 0; state.best = 0; state.total = 0; state.good = 0; state.miss = 0;
   state.round = 1; state.dur = 45; state.left = 45; state.fall = 135; state.spawnDelay = 1400;
   state.status = "playing"; if (state.contest) state.contest.turn = turn;
@@ -289,7 +290,8 @@ function roundDone() {
   var acc = state.total ? Math.round(100 * state.good / state.total) : 100;
   var bonus = state.health * 500 + acc * 5;
   state.score += bonus;
-  overlay("Level complete", esc(state.playerName) + " · <b>" + fmt(state.score) + "</b> (+ " + fmt(bonus) + ")<br>" + acc + "% · best x" + state.best + "<br>Next: " + fmtT(45 + state.round * 30) + ", faster", "Next level →", nextRound);
+  state.health = Math.min(12, state.health + 3);
+  overlay("Level complete", esc(state.playerName) + " · <b>" + fmt(state.score) + "</b> (+ " + fmt(bonus) + ")<br>" + acc + "% · best x" + state.best + " · <b>+3 HP</b><br>Next: " + fmtT(45 + state.round * 30) + ", faster", "Next level →", nextRound);
   setShare({ n: state.playerName, s: state.score, a: acc, c: state.best, m: "solo" });
   hud();
 }
@@ -298,7 +300,6 @@ function nextRound() {
   state.fall = (120 + (state.round - 1) * 25) * (state.spawnMult || 1);
   state.spawnDelay = Math.max(500, (state.spawnBase || 1600) - (state.round - 1) * 200);
   state.combo = 0; resetFight();
-  if (state.round % 3 === 1 && state.health < 5) state.health++;
   state.status = "playing"; hideOverlay(); hud();
   state.endAt = performance.now() + state.left * 1000;
   tapType();
@@ -480,6 +481,34 @@ function onlineRematch() {
 }
 
 /* hud */
+/* 12-segment health bar: -1 per miss, +3 per round clear (cap 12), flash on change */
+var HP_MAX = 12;
+var hpSegs = [];
+(function buildHp() {
+  var bar = document.querySelector(".bar");
+  if (!bar) return;
+  bar.innerHTML = "";
+  for (var i = 0; i < HP_MAX; i++) { var s = document.createElement("span"); s.className = "seg on"; bar.appendChild(s); hpSegs.push(s); }
+})();
+function paintHp() {
+  var hp = Math.max(0, Math.min(HP_MAX, state.health));
+  var prev = (state._lastHp == null) ? hp : Math.max(0, Math.min(HP_MAX, state._lastHp));
+  for (var i = 0; i < HP_MAX; i++) {
+    var s = hpSegs[i]; if (!s) continue;
+    var on = i < hp, was = i < prev;
+    s.classList.toggle("on", on);
+    if (!on && was) {
+      s.classList.remove("just-healed");
+      s.classList.add("just-hit");
+      (function (elm) { setTimeout(function () { elm.classList.remove("just-hit"); }, 650); })(s);
+    } else if (on && !was) {
+      s.classList.remove("just-hit");
+      s.classList.add("just-healed");
+      (function (elm) { setTimeout(function () { elm.classList.remove("just-healed"); }, 650); })(s);
+    }
+  }
+  state._lastHp = hp;
+}
 function hud() {
   var acc = state.total ? Math.round(100 * state.good / state.total) : 100;
   el.hudName.textContent = state.playerName;
@@ -488,7 +517,7 @@ function hud() {
   el.timer.classList.toggle("urgent", state.status === "playing" && state.left <= 10);
   el.score.textContent = fmt(state.score);
   el.combo.textContent = "x" + state.combo;
-  el.hp.style.width = (100 * state.health / 5) + "%";
+  paintHp();
   if (state.mode === "online") {
     var lead = state.score >= net.rival.s ? " · ▲ ahead" : " · ▼ behind";
     el.rival.textContent = "⚔ " + net.rivalName + ": " + fmt(net.rival.s) + " · x" + net.rival.c + " · ♥" + net.rival.h + (net.rivalDone ? " · DONE" : "") + lead;

@@ -40,8 +40,12 @@ ol li{padding:5px 0;border-bottom:1px dashed var(--line);font-size:14px}
 .hud{display:flex;justify-content:space-between;align-items:baseline;padding:6px 2px;font-weight:800}
 .hud-stats{display:flex;gap:14px;font-variant-numeric:tabular-nums}
 #hud-timer.urgent{color:var(--red)}
-.bar{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin:4px 0 10px}
-#hp-fill{height:100%;width:100%;background:var(--ink);transition:width .25s}
+.bar{display:flex;gap:3px;background:none;border:0;margin:4px 0 10px;min-height:14px}
+.bar .seg{flex:1;min-width:0;height:14px;border-radius:3px;background:var(--line);border:1px solid var(--line);transition:background-color .2s,border-color .2s}
+.bar .seg.on{background:linear-gradient(#22c55e,#16a34a);border-color:#16a34a}
+.bar .seg.just-hit{background:#e5484d;border-color:#e5484d;animation:segFlash .55s steps(2,jump-none) 2}
+.bar .seg.just-healed{background:#bbf7d0;border-color:#22c55e}
+@keyframes segFlash{0%,100%{opacity:1}50%{opacity:.15}}
 .stage{position:relative;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#000}
 canvas{display:block;width:100%;height:auto;touch-action:manipulation}
 #toast{position:absolute;top:12px;left:0;right:0;text-align:center;font-weight:900;color:#fff;font-size:clamp(18px,4vw,36px);text-shadow:0 2px 0 #000,0 0 18px rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity .15s}
@@ -53,4 +57,4 @@ canvas{display:block;width:100%;height:auto;touch-action:manipulation}
 #mobile-keys{margin-top:10px;width:100%;text-transform:uppercase}
 .how li{margin:8px 0;line-height:1.5}
 footer{margin-top:18px;font-size:12px;text-align:center}
-@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}.bar .seg.just-hit{animation:none}}
