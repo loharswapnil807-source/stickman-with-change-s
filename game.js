@@ -167,8 +167,9 @@ function target() {
 }
 
 /* combat — same motion as trailer */
-function burst(x, y, ch) {
-  var n = reduceMotion ? 4 : 14;
+function burst(x, y, ch, n) {
+  if (!n) n = reduceMotion ? 4 : 14;
+  if (reduceMotion) n = Math.min(n, 4);
   for (var i = 0; i < n; i++) parts.push({ x: x, y: y, vx: (Math.random() - 0.5) * 460, vy: -Math.random() * 340 - 60, life: 0, max: 0.5 + Math.random() * 0.4, txt: Math.random() < 0.35 ? ch : (Math.random() < 0.5 ? "★" : "▮"), col: ["#ffd23f", "#fff", "#e5484d", "#111"][(Math.random() * 4) | 0], s: 12 + Math.random() * 16 });
 }
 function recover(ms) {
@@ -200,9 +201,11 @@ function hit(letter) {
   } else { label = "SLAM"; pa = "slam"; oa = "slammed"; o.vy = 980; o.vr = 5; m.dy = -30; m.dx = 36; iy = 380; toast("SLAM!", 600); }
   state.meA = pa; state.opA = oa;
   state.fx = { x: ix, y: iy, text: label, t: 0, dur: 0.35, ch: letter.ch };
-  state.shake = reduceMotion ? 0 : Math.max(state.shake, cyc === 0 ? 10 : 7);
-  state.hitstop = reduceMotion ? 0 : 0.055;
-  burst(letter.x, Math.max(letter.y, 40), letter.ch);
+  /* feel per combo stage: [shake px, hitstop s, particles] — heavies hit harder */
+  var feel = { 1: [5, 0.025, 8], 2: [6, 0.03, 10], 3: [8, 0.045, 12], 4: [11, 0.09, 18], 5: [8, 0.05, 14], 6: [8, 0.05, 14], 0: [14, 0.12, 22] }[cyc];
+  state.shake = reduceMotion ? 0 : Math.max(state.shake, feel[0]);
+  state.hitstop = reduceMotion ? 0 : feel[1];
+  burst(letter.x, Math.max(letter.y, 40), letter.ch, feel[2]);
   sfx(480 + Math.min(state.combo, 24) * 24, 0.09, "square", 0.06);
   recover(cyc === 4 || cyc === 0 ? 560 : 420);
   hud();
