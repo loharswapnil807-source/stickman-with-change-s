@@ -1,18 +1,18 @@
-/* Offline cache for Stickman Typing Fighter (GitHub Pages / static hosts). */
-var CACHE = "typing-fighter-v2";
-var ASSETS = ["./", "./index.html", "./style.css", "./game.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
-self.addEventListener("install", function (e) {
-  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); }));
+const CACHE = 'paper-fury-v2';
+const APP_SHELL = [
+  './', './index.html', './style.css', './game.js', './manifest.webmanifest', './assets/icon.svg',
+  './src/content.js', './src/engine.js', './src/renderer.js', './src/audio.js'
+];
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
 });
-self.addEventListener("activate", function (e) {
-  e.waitUntil(caches.keys().then(function (ks) {
-    return Promise.all(ks.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
-  }).then(function () { return self.clients.claim(); }));
+self.addEventListener('activate', event => {
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
-self.addEventListener("message", function (e) {
-  if (e.data && e.data.type === "SKIP_WAITING") self.skipWaiting();
-});
-self.addEventListener("fetch", function (e) {
-  if (e.request.method !== "GET") return;
-  e.respondWith(caches.match(e.request).then(function (hit) { return hit || fetch(e.request); }));
+self.addEventListener('message', event => { if (event.data?.type === 'SKIP_WAITING') self.skipWaiting(); });
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
+    const copy = response.clone(); caches.open(CACHE).then(cache => cache.put(event.request, copy)); return response;
+  }).catch(() => caches.match('./index.html'))));
 });

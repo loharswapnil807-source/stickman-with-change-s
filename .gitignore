@@ -1,2 +1,4 @@
 # Game files only — exclude the reference recording
 *.mp4
+node_modules/
+test-results/
