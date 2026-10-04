@@ -28,16 +28,18 @@ Open <http://localhost:4173>. A production build is simply the repository root a
 | Shift | Guard while held |
 | Tab | Cycle the target |
 | Escape | Pause |
+| Theme button | Switch dark/light desktop theme |
 
-The **dojo** teaches the combat loop without damage or a time limit. **Arcade** has nine waves. **90-second rush** scores as much style as possible before time expires.
+The **dojo** teaches the combat loop without damage or a time limit. **Arcade** has nine waves across three intensity levels. **90-second rush** scores as much style as possible before time expires. **2-player local** gives each player a 45-second pass-and-play turn, while **Online room** uses a peer-to-peer 45-second race with an invite code. Online results are saved locally and are not a globally verified leaderboard.
 
 ## Architecture
 
 - `src/engine.js` is the deterministic, fixed-step combat simulation.
 - `src/renderer.js` draws all environments, paper fighters, effects, and HUD art locally on a canvas.
-- `src/audio.js` synthesizes sound effects with Web Audio. No remote media is loaded.
-- `src/content.js` contains data-driven stages, attacks, enemy types, and lessons.
-- `game.js` connects the simulation to the browser UI, keyboard, touch controls, dialogs, records, and service worker.
+- `src/audio.js` synthesizes layered sound effects with Web Audio. No local media files are required.
+- `src/content.js` contains data-driven stages, attacks, enemy types, words, and lessons.
+- `game.js` connects the simulation to the browser UI, keyboard, touch controls, dialogs, local/online competition, records, and theme preferences.
+- Online rooms load PeerJS only when requested; peer matches require an internet connection and report scores from the players' browsers.
 
 Gameplay rules are independent of rendering, so contributors can add moves and enemy behaviors without rewriting the art layer.
 

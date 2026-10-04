@@ -27,3 +27,14 @@ test('the dojo exposes an original tutorial and mobile typing field', async ({ p
   await expect(page.locator('#lesson-title')).toHaveText(/Your words hit hard/i);
   await expect(page.locator('#touch-type')).toHaveAttribute('placeholder', /Tap here/i);
 });
+
+test('theme and multiplayer setup controls are available', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /Switch to light theme/i }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('button', { name: /2-player local/i }).click();
+  await expect(page.locator('#contest-dialog')).toBeVisible();
+  await page.getByRole('button', { name: /Close local match setup/i }).click();
+  await page.getByRole('button', { name: /Online room/i }).click();
+  await expect(page.locator('#online-dialog')).toBeVisible();
+});

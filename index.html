@@ -17,6 +17,7 @@
       <a class="brand" href="./" aria-label="Paper Fury home"><span class="brand-mark" aria-hidden="true">pf<span>↗</span></span><span>PAPER FURY<small>keyboard-powered chaos</small></span></a>
       <div class="desktop-status"><span class="status-dot"></span> LOCAL SESSION <span class="separator">/</span> NO DOWNLOAD NEEDED</div>
       <button class="icon-button sound-button" id="sound-button" aria-label="Mute sound" title="Toggle sound"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4 5 9H2v6h3l6 5zM15 8c3 2 3 6 0 8m3-11c5 4 5 10 0 14"/></svg></button>
+      <button class="icon-button theme-button" id="theme-button" aria-label="Switch to light theme" title="Switch to light theme"><span aria-hidden="true">☼</span></button>
     </header>
 
     <main>
@@ -45,6 +46,10 @@
               </div>
               <div class="menu-secondary">
                 <button id="time-button"><span aria-hidden="true">◷</span> 90-second rush</button><span class="menu-dot">·</span><button id="records-button"><span aria-hidden="true">♜</span> Personal bests</button>
+              </div>
+              <div class="menu-multiplayer" aria-label="Multiplayer modes">
+                <button id="local-button"><span aria-hidden="true">⚔</span> 2-player local</button>
+                <button id="online-button"><span aria-hidden="true">↗</span> Online room</button>
               </div>
               <div class="stage-picker" role="group" aria-label="Choose starting world">
                 <span class="stage-label">YOUR DESKTOP</span>
@@ -112,9 +117,24 @@
     <div class="dialog-body"><span class="eyebrow" id="result-eyebrow">THAT’S A WRAP.</span><h2 id="result-title">WELL<br><em>PLAYED.</em></h2><div class="result-score"><span>FINAL SCORE</span><strong id="result-score">0</strong><small id="result-best"></small></div><div class="result-stats"><div><strong id="result-combo">0</strong><span>BEST COMBO</span></div><div><strong id="result-accuracy">100%</strong><span>ACCURACY</span></div><div><strong id="result-kills">0</strong><span>KNOCKOUTS</span></div></div><button class="primary-button" id="again-button">ONE MORE SCENE <span>↵</span></button><div class="result-actions"><button class="text-button" id="share-button">Copy result</button><button class="text-button" id="result-menu-button">Back to desktop</button></div></div>
   </dialog>
 
+  <dialog id="contest-dialog" class="panel-dialog">
+    <div class="dialog-titlebar"><span>local_match.exe</span><button data-close="contest-dialog" aria-label="Close local match setup">×</button></div>
+    <div class="dialog-body"><span class="eyebrow">PASS THE KEYBOARD.</span><h2>LOCAL<br><em>DUEL.</em></h2><p>Two players. One device. Each player gets a 45-second typing-combat turn, then the scores go head to head.</p><label class="setting-row" for="contest-p1"><span>Player one<small>Name shown on the local board.</small></span><input id="contest-p1" type="text" maxlength="18" value="PLAYER ONE" autocomplete="off"></label><label class="setting-row" for="contest-p2"><span>Player two<small>Swap seats when prompted.</small></span><input id="contest-p2" type="text" maxlength="18" value="PLAYER TWO" autocomplete="off"></label><button class="primary-button" id="contest-start">START LOCAL MATCH <span>↗</span></button></div>
+  </dialog>
+
+  <dialog id="pass-dialog" class="panel-dialog">
+    <div class="dialog-titlebar"><span>keyboard_swap.exe</span><button data-close="pass-dialog" aria-label="Cancel local match">×</button></div>
+    <div class="dialog-body"><span class="eyebrow">YOUR TURN IS OVER.</span><h2>PASS TO<br><em id="pass-player">PLAYER TWO.</em></h2><p>Take a breath, swap seats, and let the next fighter make their scene.</p><button class="primary-button" id="pass-button">START NEXT TURN <span>↵</span></button><button class="text-button" id="pass-cancel">Cancel match</button></div>
+  </dialog>
+
+  <dialog id="online-dialog" class="panel-dialog">
+    <div class="dialog-titlebar"><span>online_room.exe</span><button data-close="online-dialog" aria-label="Close online room">×</button></div>
+    <div class="dialog-body"><span class="eyebrow">RACE THE WORLD.</span><h2>ONLINE<br><em>ROOM.</em></h2><p>Peer-to-peer 45-second typing combat. Create a room and send the invite, or join a friend's room code. Scores are saved to each device's local board.</p><label class="setting-row" for="online-name"><span>Your name<small>Shown to your opponent.</small></span><input id="online-name" type="text" maxlength="18" value="YOU" autocomplete="off"></label><label class="setting-row" for="online-code"><span>Room code<small>Leave blank to create a room.</small></span><input id="online-code" type="text" maxlength="8" placeholder="e.g. FURY7" autocomplete="off" spellcheck="false"></label><div class="online-actions"><button class="primary-button" id="online-create">CREATE ROOM <span>＋</span></button><button class="secondary-button" id="online-join">JOIN ROOM <span>↗</span></button></div><p class="online-status" id="online-status" role="status">Ready. PeerJS is loaded only when you use online mode.</p><button class="text-button hidden" id="online-copy">Copy invite link</button></div>
+  </dialog>
+
   <dialog id="records-dialog" class="panel-dialog">
     <div class="dialog-titlebar"><span>the_receipts.txt</span><button data-close="records-dialog" aria-label="Close personal bests">×</button></div>
-    <div class="dialog-body"><span class="eyebrow">PROOF OF A GOOD TIME.</span><h2>YOUR BEST<br><em>WORK.</em></h2><div class="record-tabs" role="group" aria-label="Record mode"><button data-record-mode="arcade" class="selected" aria-pressed="true">Arcade</button><button data-record-mode="time" aria-pressed="false">90-second rush</button></div><ol id="record-list" class="record-list"></ol><p class="settings-note">Local records · difficulty shown per run · your top 10 in each mode.</p><button class="primary-button" data-close="records-dialog">BACK TO IT <span>↗</span></button></div>
+    <div class="dialog-body"><span class="eyebrow">PROOF OF A GOOD TIME.</span><h2>YOUR BEST<br><em>WORK.</em></h2><div class="record-tabs" role="group" aria-label="Record mode"><button data-record-mode="arcade" class="selected" aria-pressed="true">Arcade</button><button data-record-mode="time" aria-pressed="false">90-second rush</button><button data-record-mode="contest" aria-pressed="false">Local duel</button><button data-record-mode="online" aria-pressed="false">Online</button></div><ol id="record-list" class="record-list"></ol><p class="settings-note">Local records · difficulty shown per run · your top 10 in each mode. Online scores are peer-reported and stored on this device.</p><button class="primary-button" data-close="records-dialog">BACK TO IT <span>↗</span></button></div>
   </dialog>
   <noscript><div class="noscript">Paper Fury needs JavaScript to run. Enable it, then reload this page.</div></noscript>
   <script type="module" src="game.js"></script>

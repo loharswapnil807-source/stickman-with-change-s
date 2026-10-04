@@ -1,4 +1,4 @@
-const CACHE = 'paper-fury-v2';
+const CACHE = 'paper-fury-v3';
 const APP_SHELL = [
   './', './index.html', './style.css', './game.js', './manifest.webmanifest', './assets/icon.svg',
   './src/content.js', './src/engine.js', './src/renderer.js', './src/audio.js'

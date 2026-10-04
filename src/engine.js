@@ -20,7 +20,8 @@ export class Game {
   emit(type, data = {}) { this.events.push({ type, ...data }); }
   drainEvents() { return this.events.splice(0); }
 
-  start({ mode = 'arcade', difficulty = 'normal', stage = 0 } = {}) {
+  start({ mode = 'arcade', difficulty = 'normal', stage = 0, duration = 90, seed = null } = {}) {
+    if (seed !== null) this.seed = seed >>> 0 || 1;
     this.mode = ['arcade', 'training', 'time'].includes(mode) ? mode : 'arcade';
     this.difficulty = DIFFICULTIES[difficulty] ? difficulty : 'normal';
     this.startStage = clamp(stage | 0, 0, 2);
@@ -42,12 +43,15 @@ export class Game {
     this.wrong = 0;
     this.elapsed = 0;
     this.wave = 0;
-    this.remaining = 90;
+    this.level = 0;
+    this.duration = clamp(Number(duration) || 90, 15, 600);
+    this.remaining = this.duration;
     this.hitstop = 0;
     this.waveWait = 0;
     this.spawnTime = 0;
     this.toSpawn = 0;
     this.queue = [];
+    this.wordBags = {};
     this.lastMove = '';
     this.usedMoves = new Set();
     this.move = 'jab';
@@ -63,8 +67,17 @@ export class Game {
 
   nextWord() {
     const words = MOVES[this.move].words;
-    const options = words.filter(word => word !== this.word);
-    this.word = options[Math.floor(this.random() * options.length)];
+    let bag = this.wordBags[this.move];
+    if (!bag?.length) {
+      bag = [...words];
+      for (let i = bag.length - 1; i > 0; i--) {
+        const j = Math.floor(this.random() * (i + 1));
+        [bag[i], bag[j]] = [bag[j], bag[i]];
+      }
+      if (bag.length > 1 && bag[bag.length - 1] === this.word) [bag[0], bag[bag.length - 1]] = [bag[bag.length - 1], bag[0]];
+      this.wordBags[this.move] = bag;
+    }
+    this.word = bag.pop();
     this.progress = 0;
   }
 
@@ -206,8 +219,8 @@ export class Game {
   spawnEnemy(kind = 'doodle', forcedX) {
     const spec = ENEMY_TYPES[kind];
     const x = forcedX ?? (this.random() > .5 ? ARENA.right - 20 : ARENA.left + 20);
-    const hp = this.mode === 'training' ? 9999 : spec.hp + Math.max(0, this.wave - 3) * 4;
-    const enemy = { id: ++this.nextId, kind, x, z: 0, vx: 0, vz: 0, hp, maxHp: hp, face: x > this.player.x ? -1 : 1, state: 'approach', timer: 0, flash: 0, phase: this.random() * 6.28, age: 0, slammed: false };
+    const hp = this.mode === 'training' ? 9999 : spec.hp + Math.max(0, this.wave - 3) * 4 + Math.max(0, this.level - 1) * 10;
+    const enemy = { id: ++this.nextId, kind, x, z: 0, vx: 0, vz: 0, hp, maxHp: hp, face: x > this.player.x ? -1 : 1, state: 'approach', timer: 0, flash: 0, phase: this.random() * 6.28, age: 0, slammed: false, level: this.level };
     this.enemies.push(enemy);
     this.chooseTarget();
     this.emit('spawn', { x });
@@ -221,12 +234,14 @@ export class Game {
       return;
     }
     this.wave++;
+    this.level = Math.ceil(this.wave / 3);
     this.stage = (this.startStage + Math.floor((this.wave - 1) / 3)) % 3;
-    this.toSpawn = 2 + Math.min(4, this.wave);
-    this.spawnTime = .9;
+    this.toSpawn = 2 + Math.min(4, this.wave) + Math.max(0, this.level - 1);
+    this.intensity = 1 + (this.level - 1) * .12;
+    this.spawnTime = 1.25;
     this.player.hp = Math.min(100, this.player.hp + (this.wave === 1 ? 0 : 15));
     this.player.stamina = 100;
-    this.emit('wave', { title: `WAVE ${this.wave.toString().padStart(2, '0')}`, sub: this.wave % 3 === 0 ? 'Heavy company. Break their guard.' : 'Make every word count.' });
+    this.emit('wave', { title: `LEVEL ${this.level} · WAVE ${this.wave.toString().padStart(2, '0')}`, sub: this.wave % 3 === 0 ? 'Heavy company. Break their guard.' : this.level > 1 ? 'Sharper paper. Higher stakes.' : 'Make every word count.', level: this.level });
     this.spawnEnemy(this.wave % 3 === 0 ? 'brute' : 'doodle', clamp(this.player.x + 260, 180, 1240));
     this.toSpawn--;
   }
@@ -354,7 +369,7 @@ export class Game {
           e.state = 'telegraph'; e.timer = spec.tell * difficulty.tell;
           this.emit('warning', { x: e.x });
         }
-      } else e.x += e.face * spec.speed * difficulty.speed * dt;
+      } else e.x += e.face * spec.speed * difficulty.speed * (e.level > 1 ? 1 + (e.level - 1) * .07 : 1) * dt;
     }
     this.enemies = this.enemies.filter(e => e.state !== 'dead' || e.timer > 0);
     this.chooseTarget();
@@ -367,7 +382,7 @@ export class Game {
       this.spawnTime -= dt;
       if (this.spawnTime <= 0 && this.enemies.filter(e => e.hp > 0).length < 3) {
         this.spawnEnemy(this.wave >= 3 && this.toSpawn === 1 ? 'brute' : this.wave >= 2 && this.random() > .45 ? 'runner' : 'doodle');
-        this.toSpawn--; this.spawnTime = 1.7;
+        this.toSpawn--; this.spawnTime = 2.05 + this.random() * .55;
       }
     }
     if (!this.toSpawn && !this.enemies.length) {

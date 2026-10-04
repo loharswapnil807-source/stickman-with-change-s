@@ -60,3 +60,28 @@ test('the timed mode ends at zero seconds', () => {
   assert.equal(game.status, 'finished');
   assert.equal(game.drainEvents().at(-1).type, 'finish');
 });
+
+test('custom timed matches use their requested duration', () => {
+  const game = new Game(16); game.start({ mode: 'time', duration: 15 });
+  advance(game, 15.1);
+  const finish = game.drainEvents().find(event => event.type === 'finish');
+  assert.equal(game.status, 'finished');
+  assert.equal(finish.reason, 'time');
+  assert.ok(finish.duration >= 15);
+});
+
+test('word bags avoid repeats until the move vocabulary is exhausted', () => {
+  const game = new Game(17); game.start({ mode: 'training' });
+  const words = [game.word];
+  for (let i = 1; i < 18; i++) { game.nextWord(); words.push(game.word); }
+  assert.equal(new Set(words).size, words.length);
+});
+
+test('arcade intensity increases by level every three waves', () => {
+  const game = new Game(18); game.start({ mode: 'arcade' });
+  assert.equal(game.level, 1);
+  game.enemies = []; game.toSpawn = 0; game.waveWait = 0; game.wave = 3;
+  game.beginWave();
+  assert.equal(game.level, 2);
+  assert.ok(game.toSpawn > 5);
+});

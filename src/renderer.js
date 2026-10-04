@@ -1,9 +1,10 @@
 import { ARENA } from './engine.js';
-import { ENEMY_TYPES } from './content.js';
+import { ENEMY_TYPES, MOVES } from './content.js';
 
 export const WIDTH = 1440, HEIGHT = 810;
 const TAU = Math.PI * 2;
 const mix = (a, b, t) => a + (b - a) * t;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 function rng(seed) { return () => { seed = Math.imul(seed, 1664525) + 1013904223 | 0; return (seed >>> 0) / 4294967296; }; }
 function ellipse(c, x, y, w, h, color) { c.fillStyle = color; c.beginPath(); c.ellipse(x, y, w, h, 0, 0, TAU); c.fill(); }
 function line(c, points, color, width = 1) { c.strokeStyle = color; c.lineWidth = width; c.beginPath(); points.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke(); }
@@ -146,6 +147,11 @@ export class Renderer {
       this.rings.push({ x: event.x, y, life: .3, max: heavy ? 90 : 50, color: event.type === 'hurt' ? '#ff7f70' : '#fff5cb' });
       if (event.label) this.labels.push({ x: event.x, y: y - 65, text: event.label, life: .75, size: heavy ? 34 : 26 });
       if (!this.reducedMotion) this.shake = Math.max(this.shake, event.type === 'hurt' ? 9 : heavy ? 12 : 5);
+      this.flash = Math.max(this.flash, event.type === 'hurt' ? .1 : heavy ? .08 : .045);
+    }
+    if (event.type === 'enemySwing') {
+      this.rings.push({ x: event.x, y: ARENA.floor - 24, life: .22, max: 70, color: '#ff866d' });
+      if (!this.reducedMotion) this.shake = Math.max(this.shake, 2.5);
     }
     if (event.type === 'dodge' && !this.reducedMotion) for (let i = 0; i < 4; i++) this.ghosts.push({ x: event.x + event.direction * i * 27, life: .25 + i * .035, face: -event.direction });
   }
@@ -153,6 +159,7 @@ export class Renderer {
   update(dt) {
     this.time += dt;
     this.shake *= Math.exp(-22 * dt);
+    this.flash = Math.max(0, this.flash - dt);
     for (const p of this.particles) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 550 * dt; p.rotation += dt * 6; }
     this.particles = this.particles.filter(p => p.life > 0);
     for (const label of this.labels) { label.life -= dt; label.y -= dt * 42; }
@@ -163,7 +170,7 @@ export class Renderer {
     this.ghosts = this.ghosts.filter(g => g.life > 0);
   }
 
-  reset() { this.particles = []; this.labels = []; this.rings = []; this.ghosts = []; this.shake = 0; }
+  reset() { this.particles = []; this.labels = []; this.rings = []; this.ghosts = []; this.shake = 0; this.flash = 0; }
 
   render(game, menuStage = 0) {
     const c = this.c, scale = this.canvas.width / WIDTH;
@@ -187,6 +194,7 @@ export class Renderer {
         if (e.hp > 0) this.enemyUI(c, e, e.id === game.targetId, game.mode === 'training');
       }
       const p = game.player;
+      if (p.attack) this.attackTrail(c, p);
       c.save(); if (p.invulnerable > .3 && Math.sin(this.time * 45) > .4) c.globalAlpha = .55;
       this.fighter(c, p, true); c.restore();
       if (game.mode === 'training' && !this.reducedMotion) {
@@ -205,6 +213,7 @@ export class Renderer {
       c.save(); c.translate(l.x, l.y); c.rotate(-.08); c.globalAlpha = Math.min(1, l.life * 5); c.textAlign = 'center';
       c.font = `italic 900 ${l.size}px "Arial Black", sans-serif`; c.strokeStyle = '#263128'; c.lineWidth = 7; c.strokeText(l.text, 0, 0); c.fillStyle = '#f4f7ca'; c.fillText(l.text, 0, 0); c.restore();
     }
+    if (this.flash > 0) { c.fillStyle = `rgba(255,248,207,${this.flash * 1.8})`; c.fillRect(-8, -8, WIDTH + 16, HEIGHT + 16); }
     c.restore();
   }
 
@@ -222,6 +231,22 @@ export class Renderer {
       c.font = 'italic 900 37px "Arial Black", sans-serif'; c.strokeStyle = '#263128'; c.lineWidth = 7; c.strokeText('GOOD WORD.', 0, 0); c.fillStyle = '#e5f5a8'; c.fillText('GOOD WORD.', 0, 0); c.restore();
     }
     c.save(); c.translate(1090, 687); c.rotate(-.04); c.fillStyle = '#fff5cf'; c.fillRect(-96, -16, 192, 34); c.textAlign = 'center'; label(c, 'ALL KEYS. NO MERCY.', 0, 6, 14, '#354638'); c.restore();
+  }
+
+  attackTrail(c, player) {
+    const spec = MOVES[player.attack.move];
+    const progress = clamp(player.attack.t / spec.duration, 0, 1);
+    if (progress < .16 || progress > .78) return;
+    c.save();
+    c.translate(player.x, ARENA.floor - player.z - 125);
+    c.scale(player.face || 1, 1);
+    c.globalAlpha = Math.sin(((progress - .16) / .62) * Math.PI) * .8;
+    c.strokeStyle = player.attack.move === 'slam' ? '#ffe29a' : '#d7f578';
+    c.shadowColor = c.strokeStyle; c.shadowBlur = 18; c.lineWidth = player.attack.move === 'heavy' || player.attack.move === 'slam' ? 10 : 6;
+    c.beginPath(); c.arc(18, 0, player.attack.move === 'launch' ? 82 : 68, -.95, .55); c.stroke();
+    c.globalAlpha *= .42; c.lineWidth *= .55;
+    c.beginPath(); c.arc(26, 0, player.attack.move === 'launch' ? 104 : 88, -.85, .38); c.stroke();
+    c.restore();
   }
 
   shadow(c, x, z, scale = 1) {
